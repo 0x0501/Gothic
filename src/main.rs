@@ -1,6 +1,5 @@
 use crate::config::Config;
-use crate::trae::editor::TraeEditor;
-use crate::trae::types::TraeEditorMode;
+use crate::trae::{TraeEditor, TraeEditorMode};
 use crate::utils::{wait_for_debug_port, wait_for_shutdown};
 use anyhow::Result;
 use chromiumoxide::Browser;
