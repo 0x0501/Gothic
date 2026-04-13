@@ -1,12 +1,10 @@
-use crate::trae::editor::TraeEditor; // 需要引用 Editor
 use crate::trae::types::*; // 引入刚才定义的类型
 use crate::utils::wait_for_selector;
+use crate::{consts::DEFAULT_SELECTOR_TIMEOUT, trae::editor::TraeEditor}; // 需要引用 Editor
 use anyhow::{Error, Result};
 use chromiumoxide::cdp::browser_protocol::input::InsertTextParams;
 use std::marker::PhantomData;
 use tokio::time::{Duration, sleep};
-
-const DEFAULT_SELECTOR_TIMEOUT: u64 = 10000;
 
 #[derive(Debug)]
 pub struct TraeSoloTaskInner<'a, S: TaskState> {
@@ -16,6 +14,7 @@ pub struct TraeSoloTaskInner<'a, S: TaskState> {
     pub(crate) title: String,
 }
 
+#[derive(Debug)]
 pub enum TraeSoloTask<'a> {
     Idle(TraeSoloTaskInner<'a, Idle>),
     Running(TraeSoloTaskInner<'a, Running>),

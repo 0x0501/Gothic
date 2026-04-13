@@ -81,12 +81,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let trae_editor_builder = TraeEditor::new();
 
-    let trae_editor = trae_editor_builder.build(&mut browser).await;
+    let mut trae_editor = trae_editor_builder.build(&mut browser).await;
 
-    println!(
-        "Current Trae Mode: {:?}",
-        trae_editor.get_current_editor_mode().await
-    );
+    println!("Current Trae Mode: {:?}", trae_editor.mode);
     // switch mode
     trae_editor.switch_editor_mode(TraeEditorMode::SOLO).await?;
 
@@ -100,6 +97,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(_) => println!("✅️ Task executed successfully."),
         Err(e) => eprintln!("Task execution failed: {e}"),
     }
+
+    // get tasks from panel
+
+    let tasks = trae_editor.get_tasks().await?;
+
+    println!("Tasks: {:#?}", { tasks });
 
     // receive ctrl+c signal
     wait_for_shutdown().await?;

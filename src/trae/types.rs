@@ -10,11 +10,16 @@ pub enum TraeEditorPrebuiltSoloAgent {
     Builder,
 }
 
-// 状态结构体
+// state struct
+#[derive(Debug)]
 pub struct Interrupted;
+#[derive(Debug)]
 pub struct Running;
+#[derive(Debug)]
 pub struct WaitingForHITL;
+#[derive(Debug)]
 pub struct Finished;
+#[derive(Debug)]
 pub struct Idle;
 
 pub trait TaskState {}

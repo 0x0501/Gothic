@@ -1,6 +1,7 @@
 use crate::consts::*;
 use crate::trae::task::{TraeSoloTask, TraeSoloTaskInner};
 use crate::trae::types::*;
+use crate::utils::wait_for_selector;
 use anyhow::{Error, Result};
 use chromiumoxide::{Browser, Page, cdp::browser_protocol::target::TargetInfo};
 use std::marker::PhantomData;
@@ -11,6 +12,28 @@ pub struct TraeEditor {
     pub(crate) main_page: Page,
     pub(crate) target: TargetInfo,
     pub(crate) prebuilt_agent: TraeEditorPrebuiltSoloAgent,
+    pub(crate) mode: TraeEditorMode,
+}
+
+pub async fn get_current_editor_mode(page: &Page) -> Result<TraeEditorMode, Error> {
+    let trae_mode_badge_element = wait_for_selector(page, "div.fixed-titlebar-container div.icube-mode-tab > div.icube-tooltip-container > div.icube-tooltip-text.icube-simple-style", Duration::from_millis(DEFAULT_SELECTOR_TIMEOUT)).await.expect("Cannot locate Trae editor mode badge.");
+
+    let mode_description = trae_mode_badge_element
+        .inner_html()
+        .await
+        .expect("Cannot get the Trae mode badge text node")
+        .expect("Cannot get Trae mode text description.");
+
+    if mode_description.eq(TRAE_SOLO_MODE_TEXT_LABEL) {
+        Ok(TraeEditorMode::IDE)
+    } else if mode_description.eq(TRAE_IDE_MODE_TEXT_LABEL) {
+        Ok(TraeEditorMode::SOLO)
+    } else {
+        Err(Error::msg(format!(
+            "Cannot get the current editor mode, description: {}",
+            mode_description
+        )))
+    }
 }
 
 pub struct TraeEditorBuilder;
@@ -43,10 +66,16 @@ impl TraeEditorBuilder {
                 filtered_target, main_target, pages
             ));
 
+        // get the current mode
+        let current_mode = get_current_editor_mode(&main_page)
+            .await
+            .expect("Cannot get current mode when initializing.");
+
         return TraeEditor {
             target: main_target,
             main_page: main_page,
             prebuilt_agent: TraeEditorPrebuiltSoloAgent::Coder,
+            mode: current_mode,
         };
     }
 }
@@ -60,33 +89,24 @@ impl TraeEditor {
         return &self.main_page;
     }
 
-    pub async fn get_current_editor_mode(&self) -> Result<TraeEditorMode, Error> {
-        let trae_mode_badge_element = self.main_page.find_element("div.fixed-titlebar-container div.icube-mode-tab > div.icube-tooltip-container > div.icube-tooltip-text.icube-simple-style").await.expect("Cannot locate Trae editor mode badge.");
-
-        let mode_description = trae_mode_badge_element
-            .inner_html()
-            .await
-            .expect("Cannot get the Trae mode badge text node")
-            .expect("Cannot get Trae mode text description.");
-
-        if mode_description.eq(TRAE_SOLO_MODE_TEXT_LABEL) {
-            Ok(TraeEditorMode::IDE)
-        } else if mode_description.eq(TRAE_IDE_MODE_TEXT_LABEL) {
-            Ok(TraeEditorMode::SOLO)
-        } else {
-            Err(Error::msg("Cannot get the current editor mode"))
-        }
-    }
-
-    pub async fn switch_editor_mode(&self, mode: TraeEditorMode) -> Result<(), Error> {
-        let current_mode = self.get_current_editor_mode().await?;
-
-        if current_mode == mode {
+    pub async fn switch_editor_mode(&mut self, mode: TraeEditorMode) -> Result<(), Error> {
+        if self.mode == mode {
             return Ok(());
         }
 
         let trae_mode_tab_switch = self.main_page.find_element("div.fixed-titlebar-container div.icube-mode-tab > div.icube-mode-tab-container > div.icube-mode-tab-switch").await.expect("Cannot locate Trae editor mode switch tab.");
         trae_mode_tab_switch.click().await?;
+
+        // update current mode
+
+        match self.mode {
+            TraeEditorMode::IDE => {
+                self.mode = TraeEditorMode::SOLO;
+            }
+            TraeEditorMode::SOLO => {
+                self.mode = TraeEditorMode::IDE;
+            }
+        }
 
         Ok(())
     }
@@ -106,10 +126,9 @@ impl TraeEditor {
     // private methods
 
     // get tasks from sidebar
+    // TODO
     pub async fn get_tasks(&'_ self) -> Result<Vec<TraeSoloTask<'_>>, Error> {
-        let current_mode = self.get_current_editor_mode().await?;
-
-        if current_mode != TraeEditorMode::SOLO {
+        if self.mode != TraeEditorMode::SOLO {
             return Err(Error::msg(
                 "Cannot get tasks under IDE mode, please switch to SOLO mode.",
             ));
