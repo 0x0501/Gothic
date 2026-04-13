@@ -1,0 +1,15 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Gothic Configuration",
+    "description": "Gothic Configuration Definition",
+    "type": "object",
+    "properties": {
+        "trae_executable_path": {
+            "type": "string",
+            "description": "The absolute path to Trae executable file."
+        }
+    },
+    "required": [
+        "trae_executable_path"
+    ]
+}

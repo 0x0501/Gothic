@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::trae::{TraeEditor, TraeEditorMode};
 use crate::utils::{wait_for_debug_port, wait_for_shutdown};
 use anyhow::Result;
@@ -7,15 +8,16 @@ use std::process::Stdio;
 use tokio::process::Command;
 use tokio::time::Duration;
 
-pub mod strings;
+pub mod config;
+pub mod consts;
 pub mod trae;
 pub mod utils;
 
-const TRAE_BINARY_PATH: &'static str = "D:/Trae/Trae.exe";
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut trae_main = Command::new(TRAE_BINARY_PATH)
+    let config = Config::load()?;
+
+    let mut trae_main = Command::new(config.trae_executable_path)
         .arg("--remote-debugging-port=9222")
         .arg("--no-sandbox")
         .stdout(Stdio::null()) // inherit current stream
@@ -23,7 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .kill_on_drop(true)
         .spawn()?;
 
-    let trae_pid = trae_main.id().expect("Cannot get Trae PID.");
+    // let trae_pid = trae_main.id().expect("Cannot get Trae PID.");
 
     println!("Hello, world!");
 
@@ -79,12 +81,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let trae_editor_builder = TraeEditor::new();
 
-    let trae_editor = trae_editor_builder.build(&mut browser).await;
+    let mut trae_editor = trae_editor_builder.build(&mut browser).await;
 
-    println!(
-        "Current Trae Mode: {:?}",
-        trae_editor.get_current_editor_mode().await
-    );
+    println!("Current Trae Mode: {:?}", trae_editor.mode);
     // switch mode
     trae_editor.switch_editor_mode(TraeEditorMode::SOLO).await?;
 
@@ -98,6 +97,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(_) => println!("✅️ Task executed successfully."),
         Err(e) => eprintln!("Task execution failed: {e}"),
     }
+
+    // get tasks from panel
+
+    let tasks = trae_editor.get_tasks().await?;
+
+    println!("Tasks: {:#?}", { tasks });
 
     // receive ctrl+c signal
     wait_for_shutdown().await?;

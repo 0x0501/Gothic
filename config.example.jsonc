@@ -1,0 +1,7 @@
+{
+	"$schema": "docs/config-schema.json",
+	"name": "Gothic Configuration",
+
+    // Path to your Trae executable file
+	"trae_executable_path": ""
+}

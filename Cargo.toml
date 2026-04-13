@@ -8,4 +8,6 @@ anyhow = "1.0.102"
 async-openai = "0.34.0"
 chromiumoxide = "0.9.1"
 futures = "0.3.32"
+jsonc-parser = { version = "0.32.3", features = ["serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.51.1", features = ["signal"] }
