@@ -1,12 +1,11 @@
+use crate::trae::{TraeEditor, TraeEditorMode};
+use crate::utils::{wait_for_debug_port, wait_for_shutdown};
 use anyhow::Result;
 use chromiumoxide::Browser;
 use futures::StreamExt;
 use std::process::Stdio;
 use tokio::process::Command;
 use tokio::time::Duration;
-
-use crate::trae::{TraeEditor, TraeEditorMode};
-use crate::utils::{wait_for_debug_port, wait_for_shutdown};
 
 pub mod strings;
 pub mod trae;
@@ -94,7 +93,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .create_new_task("创建一个个人简历网站".to_string())
         .await;
 
-    let _ = task.execute().await?;
+    // execute task
+    match task.execute().await {
+        Ok(_) => println!("✅️ Task executed successfully."),
+        Err(e) => eprintln!("Task execution failed: {e}"),
+    }
 
     // receive ctrl+c signal
     wait_for_shutdown().await?;
