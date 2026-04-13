@@ -6,7 +6,10 @@ use crate::{
     utils::wait_for_selector,
 };
 use anyhow::{Error, Result};
-use chromiumoxide::{Browser, Page, cdp::browser_protocol::target::TargetInfo};
+use chromiumoxide::{
+    Browser, Page,
+    cdp::browser_protocol::{input::InsertTextParams, target::TargetInfo},
+};
 use std::marker::PhantomData;
 use tokio::time::{Duration, sleep};
 
@@ -129,13 +132,6 @@ impl<'a> TraeSoloTaskInner<'a, Idle> {
         .await
         .expect("Failed to create task, no welcome page was founded.");
 
-        // let _ = self
-        //     .editor
-        //     .main_page
-        //     .find_element("div.welcome-page-solo-agent-title")
-        //     .await
-        //     .expect("Failed to create task, no welcome page was founded.");
-
         Ok(())
     }
 
@@ -166,6 +162,31 @@ impl<'a> TraeSoloTaskInner<'a, Idle> {
 
         // check task creation state
         self.is_task_created().await?;
+
+        // fill out chat input
+
+        let chat_input_element = wait_for_selector(
+            &self.editor.main_page,
+            "#agent-chat-view div.chat-input-wrapper div.chat-input-v2-input-box-editable",
+            Duration::from_millis(1000 * 60),
+        )
+        .await
+        .expect("Cannot find chat input component.");
+
+        // activate content editable
+        chat_input_element.click().await?;
+
+        // type prompt into chat input
+        self.editor
+            .main_page
+            .execute(InsertTextParams::new(self.prompt.as_ref().unwrap()))
+            .await?; // press enter
+
+        // wait 1 sec
+        sleep(Duration::from_millis(1000)).await;
+
+        // press enter to submit the task
+        chat_input_element.press_key("Enter").await?;
         Ok(())
     }
 }
