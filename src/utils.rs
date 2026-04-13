@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use anyhow::{Error, Result, bail};
 use chromiumoxide::{Element, Page};
 use tokio::{
@@ -49,4 +51,16 @@ pub async fn wait_for_selector(
 
         sleep(Duration::from_millis(300)).await;
     }
+}
+
+pub fn normalize_executable_path_for_cdp(raw_path: &str) -> Option<String> {
+    let parent = Path::new(raw_path).parent()?;
+
+    let mut dir = parent.to_string_lossy().into_owned();
+
+    if dir.len() >= 2 && dir.as_bytes()[1] == b':' {
+        dir[0..1].make_ascii_lowercase();
+    }
+
+    Some(dir.replace('\\', "/"))
 }

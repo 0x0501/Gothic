@@ -1,7 +1,8 @@
+use crate::config::Config;
 use crate::consts::*;
 use crate::trae::task::{TraeSoloTask, TraeSoloTaskInner};
 use crate::trae::types::*;
-use crate::utils::wait_for_selector;
+use crate::utils::{normalize_executable_path_for_cdp, wait_for_selector};
 use anyhow::{Error, Result};
 use chromiumoxide::{Browser, Page, cdp::browser_protocol::target::TargetInfo};
 use std::marker::PhantomData;
@@ -44,9 +45,14 @@ impl TraeEditorBuilder {
 
         sleep(Duration::from_millis(2000)).await;
 
+        let config = Config::load().expect("Cannot load config from TraeEditorBuilder::build, make sure you write config.jsonc properly.");
+
+        let normalized_path =
+            normalize_executable_path_for_cdp(&config.trae_executable_path).unwrap();
+
         let mut filtered_target: Vec<TargetInfo> = targets
             .into_iter()
-            .filter(|t| t.url == TRAE_MAIN_PAGE_URL)
+            .filter(|t| t.url.contains(&format!("vscode-file://vscode-app/{}/resources/app/out/vs/code/electron-browser/workbench/workbench.html",normalized_path)))
             .collect();
 
         let main_target = filtered_target
@@ -141,7 +147,7 @@ impl TraeEditor {
             .expect("Cannot get task container.");
 
         let task_items = task_container
-            .find_elements("div[class*=task-item]")
+            .find_elements(r#"div[class*="index-module__task-item___"#)
             .await
             .expect("Cannot get task items from container.");
 
