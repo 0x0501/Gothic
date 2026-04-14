@@ -157,7 +157,7 @@ impl TraeEditor {
 
         let mut tasks: Vec<TraeTask> = Vec::with_capacity(task_items.len());
 
-        for item in task_items.iter() {
+        for (index, item) in task_items.iter().enumerate() {
             let class_name = item.attribute("class").await?.unwrap_or_default();
 
             let selected = class_name.contains("selected");
@@ -198,6 +198,7 @@ impl TraeEditor {
                 title,
                 status,
                 selected,
+                index,
             });
         }
 
@@ -222,11 +223,37 @@ impl TraeEditor {
         Ok(latest)
     }
 
+    pub async fn click_task_item_by_index(&self, index: usize) -> Result<(), Error> {
+        let task_container = self
+            .main_page
+            .find_element("#solo-ai-sidebar-content div[class*=task-items-list]")
+            .await
+            .expect("Cannot get task container.");
+
+        let task_items = task_container
+            .find_elements(r#"div[class*="index-module__task-item___"#)
+            .await
+            .expect("Cannot get task items from container.");
+
+        let target_task_item = task_items.get(index as usize);
+
+        match target_task_item {
+            Some(element) => {
+                element.click().await?;
+            }
+            None => {
+                println!("Cannot find element by index: {}", index);
+            }
+        }
+
+        Ok(())
+    }
+
     // pub async fn find_task_by(&self, title: &str, status: Option<TraeTaskStatus>) -> Option<TraeTask> {
     //     let guard = self.tasks.read().await;
     //     guard.iter().find(|t| {
     //         match status {
-                
+
     //         }
     //     }).cloned()
     // }

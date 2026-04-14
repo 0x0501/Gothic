@@ -29,6 +29,7 @@ pub struct TraeTask {
     pub title: String,
     pub status: TraeTaskStatus,
     pub selected: bool,
+    pub index: usize
 }
 
 impl TraeTask {

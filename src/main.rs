@@ -117,7 +117,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tasks = arc_editor.cached_tasks().await;
 
     println!("Tasks: {:#?}", tasks);
-
     // receive ctrl+c signal
     wait_for_shutdown().await?;
 
@@ -125,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = shutdown_tx.send(true);
 
     // close browser
-    browser.close().await?;
+    let _ = browser.close().await?;
 
     // join await
     let _ = handle.await?;
