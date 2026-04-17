@@ -5,6 +5,7 @@ use crate::utils::{normalize_executable_path_for_cdp, wait_for_selector};
 use anyhow::{Error, Result};
 use chromiumoxide::cdp::browser_protocol::input::InsertTextParams;
 use chromiumoxide::{Browser, Page, cdp::browser_protocol::target::TargetInfo};
+use serde::Deserialize;
 use tokio::sync::RwLock;
 use tokio::sync::watch::Receiver;
 use tokio::time::{self, Duration, sleep};
@@ -16,6 +17,13 @@ pub struct TraeEditor {
     pub(crate) prebuilt_agent: TraeEditorPrebuiltSoloAgent,
     pub(crate) mode: TraeEditorMode,
     pub(crate) tasks: RwLock<Vec<TraeTask>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskSnapshotFromUi {
+    title: String,
+    raw_status: String,
+    selected: bool,
 }
 
 pub async fn get_current_editor_mode(page: &Page) -> Result<TraeEditorMode, Error> {
@@ -145,51 +153,48 @@ impl TraeEditor {
             ));
         }
 
-        let task_container = wait_for_selector(
+        // let task_container = wait_for_selector(
+        //     &self.main_page,
+        //     "#solo-ai-sidebar-content div[class*=task-items-list]",
+        //     Duration::from_millis(DEFAULT_SELECTOR_TIMEOUT),
+        // )
+        // .await
+        // .expect("Cannot get task container.");
+
+        let _ = wait_for_selector(
             &self.main_page,
-            "#solo-ai-sidebar-content div[class*=task-items-list]",
+            r#"div[class*=index-module__task-item___]"#,
             Duration::from_millis(DEFAULT_SELECTOR_TIMEOUT),
         )
         .await
-        .expect("Cannot get task container.");
+        .expect("Cannot get task items from page.");
 
-        let task_items = task_container
-            .find_elements(r#"div[class*="index-module__task-item___"#)
-            .await
-            .expect("Cannot get task items from container.");
+        // Read the list in a single browser-side snapshot to avoid stale
+        // Element handles when the sidebar re-renders between awaits.
+        let task_snapshots: Vec<TaskSnapshotFromUi> = self
+            .main_page
+            .evaluate(
+                r#"
+                Array.from(document.querySelectorAll('div[class*="index-module__task-item___"]'))
+                  .map((item) => {
+                    const titleElement = item.querySelector('span[class*="task-title"]');
+                    const statusElement = item.querySelector('div[class*="task-type-wrap__status"]');
 
-        let mut tasks: Vec<TraeTask> = Vec::with_capacity(task_items.len());
+                    return {
+                      title: (titleElement?.textContent ?? '').trim(),
+                      raw_status: (statusElement?.innerText ?? '').trim(),
+                      selected: item.className.includes('selected'),
+                    };
+                  })
+                "#,
+            )
+            .await?
+            .into_value()?;
 
-        for (index, item) in task_items.iter().enumerate() {
-            let class_name = item.attribute("class").await?.unwrap_or_default();
+        let mut tasks: Vec<TraeTask> = Vec::with_capacity(task_snapshots.len());
 
-            let selected = class_name.contains("selected");
-
-            let raw_task_state = item
-                .find_element("div[class*=task-type-wrap__status]")
-                .await
-                .expect(&format!("Cannot get task type: {:#?}", item))
-                .inner_text()
-                .await
-                .unwrap_or_default()
-                .unwrap_or_else(|| {
-                    println!("Trying to get task type label failed, the value is None");
-                    return "".to_string();
-                });
-
-            let title = item
-                .find_element("span[class*=task-title]")
-                .await
-                .expect(&format!("Cannot get task title: {:#?}", item))
-                .inner_html()
-                .await
-                .unwrap_or_default()
-                .unwrap_or_else(|| {
-                    println!("Trying to get task title label failed, the value is None");
-                    return "".to_string();
-                });
-
-            let status = match raw_task_state.as_str() {
+        for (index, snapshot) in task_snapshots.into_iter().enumerate() {
+            let status = match snapshot.raw_status.as_str() {
                 TRAE_SOLO_TASK_RUNNING_LABEL => TraeTaskStatus::Running,
                 TRAE_SOLO_TASK_INTERRUPTED_LABEL => TraeTaskStatus::Interrupted,
                 TRAE_SOLO_TASK_FINISHED_LABEL => TraeTaskStatus::Finished,
@@ -198,9 +203,9 @@ impl TraeEditor {
             };
 
             tasks.push(TraeTask {
-                title,
+                title: snapshot.title,
                 status,
-                selected,
+                selected: snapshot.selected,
                 index,
             });
         }
@@ -229,7 +234,10 @@ impl TraeEditor {
     async fn get_task_by_index(&self, index: usize) -> Result<TraeTask, Error> {
         let latest_tasks = self.get_tasks().await?;
 
-        let target = latest_tasks.get(index).unwrap().clone();
+        let target = latest_tasks
+            .get(index)
+            .cloned()
+            .ok_or_else(|| Error::msg(format!("Cannot find task by index: {}", index)))?;
 
         Ok(target)
     }
@@ -244,26 +252,41 @@ impl TraeEditor {
 
     /// Operations
     pub async fn select_task_by_index(&self, index: usize) -> Result<(), Error> {
-        let task_container = self
+        let _ = wait_for_selector(
+            &self.main_page,
+            "#solo-ai-sidebar-content div[class*=task-items-list]",
+            Duration::from_millis(DEFAULT_SELECTOR_TIMEOUT),
+        )
+        .await
+        .expect("Cannot get task container.");
+
+        let clicked: bool = self
             .main_page
-            .find_element("#solo-ai-sidebar-content div[class*=task-items-list]")
-            .await
-            .expect("Cannot get task container.");
+            .evaluate(format!(
+                r#"
+                (() => {{
+                    const items = Array.from(document.querySelectorAll(
+                      '#solo-ai-sidebar-content div[class*="task-items-list"] div[class*="index-module__task-item___"]'
+                    ));
+                    const target = items[{index}];
 
-        let task_items = task_container
-            .find_elements(r#"div[class*="index-module__task-item___"#)
-            .await
-            .expect("Cannot get task items from container.");
+                    if (!target) {{
+                      return false;
+                    }}
 
-        let target_task_item = task_items.get(index);
+                    target.click();
+                    return true;
+                }})()
+                "#
+            ))
+            .await?
+            .into_value()?;
 
-        match target_task_item {
-            Some(element) => {
-                element.click().await?;
-            }
-            None => {
-                println!("Cannot find element by index: {}", index);
-            }
+        if !clicked {
+            return Err(Error::msg(format!(
+                "Cannot find task element by index: {}",
+                index
+            )));
         }
 
         Ok(())

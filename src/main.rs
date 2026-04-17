@@ -133,5 +133,5 @@ async fn quick_task(prompt: &str, editor: &TraeEditor) {
     }
 
     // sleep 1 sec
-    sleep(Duration::from_millis(1000)).await;
+    sleep(Duration::from_millis(3000)).await;
 }
